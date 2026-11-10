@@ -34,6 +34,10 @@ func handleCmd() {
 		Short: "Builds the docker image(s) of your repository",
 		Long:  `It will build the docker image(s) described on captain.yml in order they appear on file.`,
 		Run: func(cmd *cobra.Command, args []string) {
+			// Release shared-tag coordination locks deterministically on
+			// exit; the kernel would also release them when the process ends.
+			defer captain.ReleaseLocks()
+
 			config := captain.NewConfig(options.namespace, options.config, true)
 
 			if len(args) == 1 {
@@ -59,6 +63,8 @@ func handleCmd() {
 		Short: "Runs the tests",
 		Long:  `It will execute the commands described on test section in order they appear on file.`,
 		Run: func(cmd *cobra.Command, args []string) {
+			defer captain.ReleaseLocks()
+
 			config := captain.NewConfig(options.namespace, options.config, true)
 
 			if len(args) == 1 {
@@ -86,6 +92,8 @@ func handleCmd() {
 		Short: "Pushes the images to remote registry",
 		Long:  `It will push the generated images to the remote registry.`,
 		Run: func(cmd *cobra.Command, args []string) {
+			defer captain.ReleaseLocks()
+
 			config := captain.NewConfig(options.namespace, options.config, true)
 
 			if len(args) == 1 {
@@ -138,6 +146,8 @@ func handleCmd() {
 		Short: "Purges the stale images",
 		Long:  `It will purge the stale images. Stale image is an image that is not the latest of at least one branch.`,
 		Run: func(cmd *cobra.Command, args []string) {
+			defer captain.ReleaseLocks()
+
 			config := captain.NewConfig(options.namespace, options.config, true)
 
 			if len(args) == 1 {

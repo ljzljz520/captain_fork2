@@ -1,4 +1,4 @@
-package captain // import "github.com/harbur/captain"
+package captain
 
 import (
 	"bytes"
@@ -8,6 +8,13 @@ import (
 )
 
 func execute(name string, arg ...string) error {
+	return executeEnv(nil, name, arg...)
+}
+
+// executeEnv runs a command with extra environment variables (in KEY=VALUE
+// form) on top of the current process environment. Used to hand the
+// immutable image identity of this command's build to test scripts.
+func executeEnv(env []string, name string, arg ...string) error {
 	// Construct command for debug purposes
 	var command = name
 	for _, i := range arg {
@@ -19,6 +26,9 @@ func execute(name string, arg ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	return cmd.Run()
 }
 

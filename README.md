@@ -218,6 +218,15 @@ The following is the workflow of tagging Docker images according to git state.
 - If you're in dirty-git repository, captain will tag the built images with `latest`.
 - If you're in pristine-git repository, captain will tag the built images with `latest`, `commit-id`, `branch-name`, `tag-name`. A maximum of one tag per commit id is supported.
 
+## Concurrent builds and image identity
+
+When several workspaces build images with the same name against one shared Docker daemon, captain keeps every commit bound to its own build artifact:
+
+- **Independent build artifacts.** Each build is first claimed under a unique per-build temporary tag (`captain-b<pid>-<random>`), then resolved to its immutable image ID (`sha256:...`). All later steps of the same command carry this ID in an in-process build ledger; the temporary tag is removed once the stable tags (`latest`, commit, branch) are in place.
+- **Immutable identity for test scripts.** Test commands inherit `CAPTAIN_IMAGE_ID` (immutable image ID), `CAPTAIN_IMAGE_NAME`, `CAPTAIN_IMAGE_REV` and `CAPTAIN_IMAGE_REF`. Legacy scripts that reference `image:latest` by name keep working: while tests run, a coordination lock keeps `latest` pointing at this command's own image.
+- **Daemon- and repository-scoped coordination.** Shared tags are protected by an advisory `flock(2)` lock keyed on the Docker daemon endpoint (`DOCKER_HOST`, default `unix:///var/run/docker.sock`) plus the image repository name. Two workspaces building the same image on the same daemon are serialized; different images or different daemons never block each other. Lock files live in `~/.captain/locks/` (override with `CAPTAIN_LOCK_DIR`). Locks are released when the command exits — the kernel drops them automatically even after a crash, so no stale coordination state survives.
+- **External retag failure boundary.** The lock only coordinates cooperating captain processes. If a non-cooperating actor (a manual `docker tag`, another tool sharing the daemon) moves a shared tag, captain cannot prevent it, but before every test command and every push it re-inspects the tag and compares it against the recorded immutable image ID. On drift the command fails fast with exit code `13` (`ExternalRetag`) and an `external retag detected` message instead of testing or publishing another build's content. Other exit codes: `14` (`LockFailed`) when the coordination lock cannot be acquired.
+
 ## Roadmap
 
 Here are some of the features pending to be implemented:

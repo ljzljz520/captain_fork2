@@ -33,4 +33,13 @@ const (
 
 	// ExecuteFailed represents an execution failure
 	ExecuteFailed = 12
+
+	// ExternalRetag represents a shared docker tag being moved to a
+	// different image ID than this command's own build by a non-cooperating
+	// actor. Captain refuses to test or push the foreign content.
+	ExternalRetag = 13
+
+	// LockFailed represents failure to acquire the local coordination lock
+	// protecting shared docker tags.
+	LockFailed = 14
 )

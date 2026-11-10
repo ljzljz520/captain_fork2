@@ -66,6 +66,54 @@ func buildImage(app App, tag string, force bool) error {
 	return err
 }
 
+// inspectImageID resolves a name:tag reference to the immutable image ID
+// ("sha256:...") held by the daemon.
+func inspectImageID(repo string) (string, error) {
+	image, err := client.InspectImage(repo)
+	if err != nil {
+		return "", err
+	}
+	return image.ID, nil
+}
+
+// buildImageUnique builds the app image under a per-build temporary tag
+// instead of a shared tag such as "latest", then resolves the immutable
+// image ID. Concurrent builds on the same daemon therefore get independent
+// artifacts that cannot overwrite each other; the returned buildRecord is
+// the only identity handed to later test/push steps.
+func buildImageUnique(app App, force bool) (buildRecord, error) {
+	buildTag := newBuildTag()
+	if err := buildImage(app, buildTag, force); err != nil {
+		return buildRecord{}, err
+	}
+	id, err := inspectImageID(app.Image + ":" + buildTag)
+	if err != nil {
+		return buildRecord{}, fmt.Errorf("built %s:%s but failed to resolve its immutable image ID: %v",
+			app.Image, buildTag, err)
+	}
+	return buildRecord{Image: app.Image, ID: id, BuildTag: buildTag}, nil
+}
+
+// verifyTagPointsTo re-inspects a shared tag and confirms it still resolves
+// to the immutable image ID recorded for this command. Returns
+// *ExternalRetagError on drift, so callers can distinguish external retag
+// from ordinary daemon failures.
+func verifyTagPointsTo(app App, tag, expectedID string) error {
+	actual, err := inspectImageID(app.Image + ":" + tag)
+	if err != nil {
+		return fmt.Errorf("cannot verify %s:%s before using it: %v", app.Image, tag, err)
+	}
+	if actual != expectedID {
+		return &ExternalRetagError{
+			Image:      app.Image,
+			Tag:        tag,
+			ExpectedID: expectedID,
+			ActualID:   actual,
+		}
+	}
+	return nil
+}
+
 func pushImage(image string, version string) error {
 	return execute("docker", "push", image+":"+version)
 }
